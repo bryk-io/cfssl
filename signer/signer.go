@@ -84,14 +84,42 @@ func (s *Subject) Name() pkix.Name {
 	var name pkix.Name
 	name.CommonName = s.CN
 
+	var uniqueIDs, pseudonyms, unstructuredNames []string
 	for _, n := range s.Names {
 		appendIf(n.C, &name.Country)
 		appendIf(n.ST, &name.Province)
 		appendIf(n.L, &name.Locality)
 		appendIf(n.O, &name.Organization)
 		appendIf(n.OU, &name.OrganizationalUnit)
+
+		// Additional fields
+		appendIf(n.PC, &name.PostalCode)
+		appendIf(n.SA, &name.StreetAddress)
+		appendIf(n.UniqueIdentifier, &uniqueIDs)
+		appendIf(n.Pseudonym, &pseudonyms)
+		appendIf(n.UnstructuredName, &unstructuredNames)
 	}
 	name.SerialNumber = s.SerialNumber
+
+	// Add extraName values if required
+	if len(uniqueIDs) != 0 {
+		name.ExtraNames = append(name.ExtraNames, pkix.AttributeTypeAndValue{
+			Type:  asn1.ObjectIdentifier{2, 5, 4, 45},
+			Value: strings.Join(uniqueIDs, "/"),
+		})
+	}
+	if len(pseudonyms) != 0 {
+		name.ExtraNames = append(name.ExtraNames, pkix.AttributeTypeAndValue{
+			Type:  asn1.ObjectIdentifier{2, 5, 4, 65},
+			Value: strings.Join(pseudonyms, "/"),
+		})
+	}
+	if len(unstructuredNames) != 0 {
+		name.ExtraNames = append(name.ExtraNames, pkix.AttributeTypeAndValue{
+			Type:  asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 9, 2},
+			Value: strings.Join(unstructuredNames, "/"),
+		})
+	}
 	return name
 }
 

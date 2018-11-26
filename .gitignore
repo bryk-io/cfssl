@@ -4,3 +4,5 @@ cli/serve/static.rice-box.go
 coverprofile.txt
 gopath
 bin
+.idea
+.DS_Store

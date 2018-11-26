@@ -35,6 +35,13 @@ type Name struct {
 	O            string // OrganisationName
 	OU           string // OrganisationalUnitName
 	SerialNumber string
+
+	// Additional fields
+	PC               string `json:"pc,omitempty" yaml:"pc,omitempty"` // PostalCode
+	SA               string `json:"sa,omitempty" yaml:"sa,omitempty"` // StringAddress
+	Pseudonym        string `json:"pseudonym,omitempty" yaml:"pseudonym,omitempty"`
+	UniqueIdentifier string `json:"unique_identifier,omitempty" yaml:"unique_identifier,omitempty"`
+	UnstructuredName string `json:"unstructured_name,omitempty" yaml:"unstructured_name,omitempty"`
 }
 
 // A KeyRequest is a generic request for a new key.
@@ -167,14 +174,42 @@ func (cr *CertificateRequest) Name() pkix.Name {
 	var name pkix.Name
 	name.CommonName = cr.CN
 
+	var uniqueIDs, pseudonyms, unstructuredNames []string
 	for _, n := range cr.Names {
 		appendIf(n.C, &name.Country)
 		appendIf(n.ST, &name.Province)
 		appendIf(n.L, &name.Locality)
 		appendIf(n.O, &name.Organization)
 		appendIf(n.OU, &name.OrganizationalUnit)
+
+		// Additional fields
+		appendIf(n.PC, &name.PostalCode)
+		appendIf(n.SA, &name.StreetAddress)
+		appendIf(n.UniqueIdentifier, &uniqueIDs)
+		appendIf(n.Pseudonym, &pseudonyms)
+		appendIf(n.UnstructuredName, &unstructuredNames)
 	}
 	name.SerialNumber = cr.SerialNumber
+
+	// Add extraName values if required
+	if len(uniqueIDs) != 0 {
+		name.ExtraNames = append(name.ExtraNames, pkix.AttributeTypeAndValue{
+			Type:  asn1.ObjectIdentifier{2, 5, 4, 45},
+			Value: strings.Join(uniqueIDs, "/"),
+		})
+	}
+	if len(pseudonyms) != 0 {
+		name.ExtraNames = append(name.ExtraNames, pkix.AttributeTypeAndValue{
+			Type:  asn1.ObjectIdentifier{2, 5, 4, 65},
+			Value: strings.Join(pseudonyms, "/"),
+		})
+	}
+	if len(unstructuredNames) != 0 {
+		name.ExtraNames = append(name.ExtraNames, pkix.AttributeTypeAndValue{
+			Type:  asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 9, 2},
+			Value: strings.Join(unstructuredNames, "/"),
+		})
+	}
 	return name
 }
 
@@ -273,9 +308,16 @@ func getHosts(cert *x509.Certificate) []string {
 }
 
 // getNames returns an array of Names from the certificate
-// It onnly cares about Country, Organization, OrganizationalUnit, Locality, Province
+// It cares about:
+//   Country
+//   Organization
+//   OrganizationalUnit
+//   Locality
+//   Province
+//   PostalCode
+//   StreetAddress
 func getNames(sub pkix.Name) []Name {
-	// anonymous func for finding the max of a list of interger
+	// anonymous func for finding the max of a list of integers
 	max := func(v1 int, vn ...int) (max int) {
 		max = v1
 		for i := 0; i < len(vn); i++ {
@@ -291,6 +333,8 @@ func getNames(sub pkix.Name) []Name {
 	nou := len(sub.OrganizationalUnit)
 	nl := len(sub.Locality)
 	np := len(sub.Province)
+	npc := len(sub.PostalCode)
+	nst := len(sub.StreetAddress)
 
 	n := max(nc, norg, nou, nl, np)
 
@@ -311,6 +355,12 @@ func getNames(sub pkix.Name) []Name {
 		if i < np {
 			names[i].ST = sub.Province[i]
 		}
+		if i < npc {
+			names[i].PC = sub.PostalCode[i]
+		}
+		if i < nst {
+			names[i].SA = sub.StreetAddress[i]
+		}
 	}
 	return names
 }
@@ -323,7 +373,6 @@ type Generator struct {
 // ProcessRequest validates and processes the incoming request. It is
 // a wrapper around a validator and the ParseRequest function.
 func (g *Generator) ProcessRequest(req *CertificateRequest) (csr, key []byte, err error) {
-
 	log.Info("generate received request")
 	err = g.Validator(req)
 	if err != nil {
