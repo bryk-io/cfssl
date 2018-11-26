@@ -239,6 +239,8 @@ func ParseCertificateRequest(s Signer, csrBytes []byte) (template *x509.Certific
 			template.IsCA = constraints.IsCA
 			template.MaxPathLen = constraints.MaxPathLen
 			template.MaxPathLenZero = template.MaxPathLen == 0
+		} else {
+			template.ExtraExtensions = append(template.ExtraExtensions, val)
 		}
 	}
 
