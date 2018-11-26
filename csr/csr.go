@@ -4,7 +4,6 @@ package csr
 import (
 	"crypto"
 	"crypto/ecdsa"
-	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -42,105 +41,6 @@ type Name struct {
 	Pseudonym        string `json:"pseudonym,omitempty" yaml:"pseudonym,omitempty"`
 	UniqueIdentifier string `json:"unique_identifier,omitempty" yaml:"unique_identifier,omitempty"`
 	UnstructuredName string `json:"unstructured_name,omitempty" yaml:"unstructured_name,omitempty"`
-}
-
-// A KeyRequest is a generic request for a new key.
-type KeyRequest interface {
-	Algo() string
-	Size() int
-	Generate() (crypto.PrivateKey, error)
-	SigAlgo() x509.SignatureAlgorithm
-}
-
-// A BasicKeyRequest contains the algorithm and key size for a new private key.
-type BasicKeyRequest struct {
-	A string `json:"algo" yaml:"algo"`
-	S int    `json:"size" yaml:"size"`
-}
-
-// NewBasicKeyRequest returns a default BasicKeyRequest.
-func NewBasicKeyRequest() *BasicKeyRequest {
-	return &BasicKeyRequest{"ecdsa", curveP256}
-}
-
-// Algo returns the requested key algorithm represented as a string.
-func (kr *BasicKeyRequest) Algo() string {
-	return kr.A
-}
-
-// Size returns the requested key size.
-func (kr *BasicKeyRequest) Size() int {
-	return kr.S
-}
-
-// Generate generates a key as specified in the request. Currently,
-// only ECDSA and RSA are supported.
-func (kr *BasicKeyRequest) Generate() (crypto.PrivateKey, error) {
-	log.Debugf("generate key from request: algo=%s, size=%d", kr.Algo(), kr.Size())
-	switch kr.Algo() {
-	case "rsa":
-		if kr.Size() < 2048 {
-			return nil, errors.New("RSA key is too weak")
-		}
-		if kr.Size() > 8192 {
-			return nil, errors.New("RSA key size too large")
-		}
-		return rsa.GenerateKey(rand.Reader, kr.Size())
-	case "ecdsa":
-		var curve elliptic.Curve
-		switch kr.Size() {
-		case curveP256:
-			curve = elliptic.P256()
-		case curveP384:
-			curve = elliptic.P384()
-		case curveP521:
-			curve = elliptic.P521()
-		default:
-			return nil, errors.New("invalid curve")
-		}
-		return ecdsa.GenerateKey(curve, rand.Reader)
-	default:
-		return nil, errors.New("invalid algorithm")
-	}
-}
-
-// SigAlgo returns an appropriate X.509 signature algorithm given the
-// key request's type and size.
-func (kr *BasicKeyRequest) SigAlgo() x509.SignatureAlgorithm {
-	switch kr.Algo() {
-	case "rsa":
-		switch {
-		case kr.Size() >= 4096:
-			return x509.SHA512WithRSA
-		case kr.Size() >= 3072:
-			return x509.SHA384WithRSA
-		case kr.Size() >= 2048:
-			return x509.SHA256WithRSA
-		default:
-			return x509.SHA1WithRSA
-		}
-	case "ecdsa":
-		switch kr.Size() {
-		case curveP521:
-			return x509.ECDSAWithSHA512
-		case curveP384:
-			return x509.ECDSAWithSHA384
-		case curveP256:
-			return x509.ECDSAWithSHA256
-		default:
-			return x509.ECDSAWithSHA1
-		}
-	default:
-		return x509.UnknownSignatureAlgorithm
-	}
-}
-
-// CAConfig is a section used in the requests initialising a new CA.
-type CAConfig struct {
-	PathLength  int    `json:"pathlen" yaml:"pathlen"`
-	PathLenZero bool   `json:"pathlenzero" yaml:"pathlenzero"`
-	Expiry      string `json:"expiry" yaml:"expiry"`
-	Backdate    string `json:"backdate" yaml:"backdate"`
 }
 
 // A CertificateRequest encapsulates the API interface to the
@@ -211,12 +111,6 @@ func (cr *CertificateRequest) Name() pkix.Name {
 		})
 	}
 	return name
-}
-
-// BasicConstraints CSR information RFC 5280, 4.2.1.9
-type BasicConstraints struct {
-	IsCA       bool `asn1:"optional"`
-	MaxPathLen int  `asn1:"optional,default:-1"`
 }
 
 // ParseRequest takes a certificate request and generates a key and
@@ -365,28 +259,6 @@ func getNames(sub pkix.Name) []Name {
 	return names
 }
 
-// A Generator is responsible for validating certificate requests.
-type Generator struct {
-	Validator func(*CertificateRequest) error
-}
-
-// ProcessRequest validates and processes the incoming request. It is
-// a wrapper around a validator and the ParseRequest function.
-func (g *Generator) ProcessRequest(req *CertificateRequest) (csr, key []byte, err error) {
-	log.Info("generate received request")
-	err = g.Validator(req)
-	if err != nil {
-		log.Warningf("invalid request: %v", err)
-		return nil, nil, err
-	}
-
-	csr, key, err = ParseRequest(req)
-	if err != nil {
-		return nil, nil, err
-	}
-	return
-}
-
 // IsNameEmpty returns true if the name has no identifying information in it.
 func IsNameEmpty(n Name) bool {
 	empty := func(s string) bool { return strings.TrimSpace(s) == "" }
@@ -455,27 +327,4 @@ func Generate(priv crypto.Signer, req *CertificateRequest) (csr []byte, err erro
 	log.Info("encoded CSR")
 	csr = pem.EncodeToMemory(&block)
 	return
-}
-
-// appendCAInfoToCSR appends CAConfig BasicConstraint extension to a CSR
-func appendCAInfoToCSR(reqConf *CAConfig, csr *x509.CertificateRequest) error {
-	pathlen := reqConf.PathLength
-	if pathlen == 0 && !reqConf.PathLenZero {
-		pathlen = -1
-	}
-	val, err := asn1.Marshal(BasicConstraints{true, pathlen})
-
-	if err != nil {
-		return err
-	}
-
-	csr.ExtraExtensions = []pkix.Extension{
-		{
-			Id:       asn1.ObjectIdentifier{2, 5, 29, 19},
-			Value:    val,
-			Critical: true,
-		},
-	}
-
-	return nil
 }

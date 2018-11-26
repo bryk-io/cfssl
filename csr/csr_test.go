@@ -15,9 +15,8 @@ import (
 	"github.com/cloudflare/cfssl/helpers"
 )
 
-//TestNew validate the CertificateRequest created to return with a BasicKeyRequest
-//in KeyRequest field
-
+// TestNew validate the CertificateRequest created to return with a BasicKeyRequest
+// in KeyRequest field
 func TestNew(t *testing.T) {
 
 	if cr := New(); cr.KeyRequest == nil {
