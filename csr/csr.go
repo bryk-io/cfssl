@@ -52,7 +52,7 @@ type CertificateRequest struct {
 	KeyRequest   KeyRequest       `json:"key,omitempty" yaml:"key,omitempty"`
 	CA           *CAConfig        `json:"ca,omitempty" yaml:"ca,omitempty"`
 	SerialNumber string           `json:"serialnumber,omitempty" yaml:"serialnumber,omitempty"`
-	Extensions   []pkix.Extension `json:"extensions,omitempty" yaml:"extensions,omitempty"`
+	Extensions   []Extension `json:"extensions,omitempty" yaml:"extensions,omitempty"`
 }
 
 // New returns a new, empty CertificateRequest with a
@@ -315,7 +315,11 @@ func Generate(priv crypto.Signer, req *CertificateRequest) (csr []byte, err erro
 	}
 
 	if req.Extensions != nil {
-		tpl.ExtraExtensions = append(tpl.ExtraExtensions, req.Extensions...)
+		for _, e := range req.Extensions {
+			if pe, err := e.toPKIX(); err == nil {
+				tpl.ExtraExtensions = append(tpl.ExtraExtensions, pe)
+			}
+		}
 	}
 
 	csr, err = x509.CreateCertificateRequest(rand.Reader, &tpl, priv)
