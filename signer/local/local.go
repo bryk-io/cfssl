@@ -199,7 +199,7 @@ func (s *Signer) Sign(req signer.SignRequest) (cert []byte, err error) {
 			cferr.BadRequest, errors.New("not a csr"))
 	}
 
-	csrTemplate, err := signer.ParseCertificateRequest(s, block.Bytes)
+	csrTemplate, err := signer.ParseCertificateRequest(s, block.Bytes, profile.AllowedExtensions)
 	if err != nil {
 		return nil, err
 	}

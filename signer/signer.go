@@ -199,7 +199,7 @@ func DefaultSigAlgo(priv crypto.Signer) x509.SignatureAlgorithm {
 
 // ParseCertificateRequest takes an incoming certificate request and
 // builds a certificate template from it.
-func ParseCertificateRequest(s Signer, csrBytes []byte) (template *x509.Certificate, err error) {
+func ParseCertificateRequest(s Signer, csrBytes []byte, allowedExtensions []config.OID) (template *x509.Certificate, err error) {
 	csrv, err := x509.ParseCertificateRequest(csrBytes)
 	if err != nil {
 		err = cferr.Wrap(cferr.CSRError, cferr.ParseFailed, err)
@@ -240,7 +240,12 @@ func ParseCertificateRequest(s Signer, csrBytes []byte) (template *x509.Certific
 			template.MaxPathLen = constraints.MaxPathLen
 			template.MaxPathLenZero = template.MaxPathLen == 0
 		} else {
-			template.ExtraExtensions = append(template.ExtraExtensions, val)
+			// Only preserve extensions that are allowed by the signing profile
+			for _, ae := range allowedExtensions {
+				if ae.String() == val.Id.String() {
+					template.ExtraExtensions = append(template.ExtraExtensions, val)
+				}
+			}
 		}
 	}
 
