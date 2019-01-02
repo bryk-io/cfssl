@@ -15,7 +15,7 @@ import (
 type Extension struct {
 	Id       string `json:"id"`
 	Critical bool   `json:"critical"`
-	Value    string `json:"value"`
+	Value    []byte `json:"value"`
 }
 
 func (e *Extension) toPKIX() (ext pkix.Extension, err error) {
@@ -24,7 +24,7 @@ func (e *Extension) toPKIX() (ext pkix.Extension, err error) {
 		return
 	}
 	ext.Critical = e.Critical
-	ext.Value = []byte(e.Value)
+	ext.Value = e.Value
 	return
 }
 

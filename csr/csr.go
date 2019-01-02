@@ -175,6 +175,15 @@ func ExtractCertificateRequest(cert *x509.Certificate) *CertificateRequest {
 	req.Hosts = getHosts(cert)
 	req.SerialNumber = cert.Subject.SerialNumber
 
+	// Keep certificate extensions
+	for _, e := range cert.Extensions {
+		req.Extensions = append(req.Extensions, Extension{
+			Id:       e.Id.String(),
+			Critical: e.Critical,
+			Value:    e.Value,
+		})
+	}
+
 	if cert.IsCA {
 		req.CA = new(CAConfig)
 		// CA expiry length is calculated based on the input cert
@@ -231,7 +240,7 @@ func getNames(sub pkix.Name) []Name {
 	npc := len(sub.PostalCode)
 	nst := len(sub.StreetAddress)
 
-	n := max(nc, norg, nou, nl, np)
+	n := max(nc, norg, nou, nl, np, npc, nst)
 
 	names := make([]Name, n)
 	for i := range names {
