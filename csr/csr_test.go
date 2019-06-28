@@ -18,16 +18,15 @@ import (
 // TestNew validate the CertificateRequest created to return with a BasicKeyRequest
 // in KeyRequest field
 func TestNew(t *testing.T) {
-
 	if cr := New(); cr.KeyRequest == nil {
-		t.Fatalf("Should create a new, empty certificate request with BasicKeyRequest")
+		t.Fatalf("Should create a new, empty certificate request with KeyRequest")
 	}
 }
 
-// TestBasicKeyRequest ensures that key generation returns the same type of
-// key specified in the BasicKeyRequest.
-func TestBasicKeyRequest(t *testing.T) {
-	kr := NewBasicKeyRequest()
+// TestKeyRequest ensures that key generation returns the same type of
+// key specified in the KeyRequest.
+func TestKeyRequest(t *testing.T) {
+	kr := NewKeyRequest()
 	priv, err := kr.Generate()
 	if err != nil {
 		t.Fatalf("%v", err)
@@ -67,7 +66,7 @@ func TestPKIXName(t *testing.T) {
 			},
 		},
 		Hosts:      []string{"cloudflare.com", "www.cloudflare.com"},
-		KeyRequest: NewBasicKeyRequest(),
+		KeyRequest: NewKeyRequest(),
 	}
 
 	name := cr.Name()
@@ -108,7 +107,7 @@ func TestParseRequest(t *testing.T) {
 			},
 		},
 		Hosts:      []string{"cloudflare.com", "www.cloudflare.com", "192.168.0.1", "jdoe@example.com", "https://www.cloudflare.com"},
-		KeyRequest: NewBasicKeyRequest(),
+		KeyRequest: NewKeyRequest(),
 	}
 
 	_, _, err := ParseRequest(cr)
@@ -142,7 +141,7 @@ func TestParseRequestCA(t *testing.T) {
 			PathLength:  0,
 			PathLenZero: true,
 		},
-		KeyRequest: NewBasicKeyRequest(),
+		KeyRequest: NewKeyRequest(),
 	}
 
 	csrBytes, _, err := ParseRequest(cr)
@@ -203,7 +202,7 @@ func TestParseRequestCANoPathlen(t *testing.T) {
 			PathLength:  0,
 			PathLenZero: false,
 		},
-		KeyRequest: NewBasicKeyRequest(),
+		KeyRequest: NewKeyRequest(),
 	}
 
 	csrBytes, _, err := ParseRequest(cr)
@@ -261,7 +260,7 @@ func TestECGeneration(t *testing.T) {
 	var eckey *ecdsa.PrivateKey
 
 	for _, sz := range []int{256, 384, 521} {
-		kr := &BasicKeyRequest{"ecdsa", sz}
+		kr := &KeyRequest{"ecdsa", sz}
 		priv, err := kr.Generate()
 		if err != nil {
 			t.Fatalf("%v", err)
@@ -280,7 +279,7 @@ func TestRSAKeyGeneration(t *testing.T) {
 	var rsakey *rsa.PrivateKey
 
 	for _, sz := range []int{2048, 3072, 4096} {
-		kr := &BasicKeyRequest{"rsa", sz}
+		kr := &KeyRequest{"rsa", sz}
 		priv, err := kr.Generate()
 		if err != nil {
 			t.Fatalf("%v", err)
@@ -295,12 +294,12 @@ func TestRSAKeyGeneration(t *testing.T) {
 	}
 }
 
-// TestBadBasicKeyRequest ensures that generating a key from a BasicKeyRequest
+// TestBadKeyRequest ensures that generating a key from a KeyRequest
 // fails with an invalid algorithm, or an invalid RSA or ECDSA key
 // size. An invalid ECDSA key size is any size other than 256, 384, or
 // 521; an invalid RSA key size is any size less than 2048 bits.
-func TestBadBasicKeyRequest(t *testing.T) {
-	kr := &BasicKeyRequest{"yolocrypto", 1024}
+func TestBadKeyRequest(t *testing.T) {
+	kr := &KeyRequest{"yolocrypto", 1024}
 
 	if _, err := kr.Generate(); err == nil {
 		t.Fatal("Key generation should fail with invalid algorithm")
@@ -322,7 +321,7 @@ func TestBadBasicKeyRequest(t *testing.T) {
 		t.Fatal("The wrong signature algorithm was returned from SigAlgo!")
 	}
 
-	kr = &BasicKeyRequest{"tobig", 9216}
+	kr = &KeyRequest{"tobig", 9216}
 
 	kr.A = "rsa"
 	if _, err := kr.Generate(); err == nil {
@@ -332,9 +331,9 @@ func TestBadBasicKeyRequest(t *testing.T) {
 	}
 }
 
-// TestDefaultBasicKeyRequest makes sure that certificate requests without
+// TestDefaultKeyRequest makes sure that certificate requests without
 // explicit key requests fall back to the default key request.
-func TestDefaultBasicKeyRequest(t *testing.T) {
+func TestDefaultKeyRequest(t *testing.T) {
 	var req = &CertificateRequest{
 		Names: []Name{
 			{
@@ -359,7 +358,7 @@ func TestDefaultBasicKeyRequest(t *testing.T) {
 		t.Fatal("Bad private key was generated!")
 	}
 
-	DefaultKeyRequest := NewBasicKeyRequest()
+	DefaultKeyRequest := NewKeyRequest()
 	switch block.Type {
 	case "RSA PRIVATE KEY":
 		if DefaultKeyRequest.Algo() != "rsa" {
@@ -387,7 +386,7 @@ func TestRSACertRequest(t *testing.T) {
 		},
 		CN:         "cloudflare.com",
 		Hosts:      []string{"cloudflare.com", "www.cloudflare.com", "jdoe@example.com", "https://www.cloudflare.com"},
-		KeyRequest: &BasicKeyRequest{"rsa", 2048},
+		KeyRequest: &KeyRequest{"rsa", 2048},
 	}
 	_, _, err := ParseRequest(req)
 	if err != nil {
@@ -409,7 +408,7 @@ func TestBadCertRequest(t *testing.T) {
 		},
 		CN:         "cloudflare.com",
 		Hosts:      []string{"cloudflare.com", "www.cloudflare.com"},
-		KeyRequest: &BasicKeyRequest{"yolo-crypto", 2048},
+		KeyRequest: &KeyRequest{"yolo-crypto", 2048},
 	}
 	_, _, err := ParseRequest(req)
 	if err == nil {
@@ -444,7 +443,7 @@ func TestGenerator(t *testing.T) {
 		},
 		CN:         "cloudflare.com",
 		Hosts:      []string{"cloudflare.com", "www.cloudflare.com", "192.168.0.1", "jdoe@example.com", "https://www.cloudflare.com"},
-		KeyRequest: &BasicKeyRequest{"rsa", 2048},
+		KeyRequest: &KeyRequest{"rsa", 2048},
 	}
 
 	csrBytes, _, err := g.ProcessRequest(req)
@@ -500,7 +499,7 @@ func TestBadGenerator(t *testing.T) {
 		},
 		// Missing CN
 		Hosts:      []string{"cloudflare.com", "www.cloudflare.com"},
-		KeyRequest: &BasicKeyRequest{"rsa", 2048},
+		KeyRequest: &KeyRequest{"rsa", 2048},
 	}
 
 	_, _, err := g.ProcessRequest(missingCN)
@@ -522,7 +521,7 @@ func TestWeakCSR(t *testing.T) {
 		},
 		CN:         "cloudflare.com",
 		Hosts:      []string{"cloudflare.com", "www.cloudflare.com", "jdoe@example.com", "https://www.cloudflare.com"},
-		KeyRequest: &BasicKeyRequest{"rsa", 1024},
+		KeyRequest: &KeyRequest{"rsa", 1024},
 	}
 	g := &Generator{testValidator}
 
@@ -583,7 +582,7 @@ func TestGenerate(t *testing.T) {
 		},
 		CN:         "cloudflare.com",
 		Hosts:      []string{"cloudflare.com", "www.cloudflare.com", "192.168.0.1", "jdoe@example.com", "https://www.cloudflare.com"},
-		KeyRequest: &BasicKeyRequest{"ecdsa", 256},
+		KeyRequest: &KeyRequest{"ecdsa", 256},
 	}
 
 	key, err := req.KeyRequest.Generate()
@@ -638,7 +637,7 @@ func TestReGenerate(t *testing.T) {
 		},
 		CN:         "cloudflare.com",
 		Hosts:      []string{"cloudflare.com", "www.cloudflare.com", "192.168.0.1"},
-		KeyRequest: &BasicKeyRequest{"ecdsa", 256},
+		KeyRequest: &KeyRequest{"ecdsa", 256},
 	}
 
 	_, key, err := ParseRequest(req)
@@ -681,7 +680,7 @@ func TestBadReGenerate(t *testing.T) {
 		},
 		CN:         "cloudflare.com",
 		Hosts:      []string{"cloudflare.com", "www.cloudflare.com", "192.168.0.1"},
-		KeyRequest: &BasicKeyRequest{"ecdsa", 256},
+		KeyRequest: &KeyRequest{"ecdsa", 256},
 	}
 
 	_, key, err := ParseRequest(req)

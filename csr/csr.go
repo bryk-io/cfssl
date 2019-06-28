@@ -29,12 +29,12 @@ const (
 
 // A Name contains the SubjectInfo fields.
 type Name struct {
-	C            string // Country
-	ST           string // State
-	L            string // Locality
-	O            string // OrganisationName
-	OU           string // OrganisationalUnitName
-	SerialNumber string
+	C            string `json:"C,omitempty" yaml:"C,omitempty"`   // Country
+	ST           string `json:"ST,omitempty" yaml:"ST,omitempty"` // State
+	L            string `json:"L,omitempty" yaml:"L,omitempty"`   // Locality
+	O            string `json:"O,omitempty" yaml:"O,omitempty"`   // OrganisationName
+	OU           string `json:"OU,omitempty" yaml:"OU,omitempty"` // OrganisationalUnitName
+	SerialNumber string `json:"SerialNumber,omitempty" yaml:"SerialNumber,omitempty"`
 
 	// Additional fields
 	PC               string `json:"pc,omitempty" yaml:"pc,omitempty"` // PostalCode
@@ -47,20 +47,20 @@ type Name struct {
 // A CertificateRequest encapsulates the API interface to the
 // certificate request functionality.
 type CertificateRequest struct {
-	CN           string
-	Names        []Name           `json:"names" yaml:"names"`
-	Hosts        []string         `json:"hosts" yaml:"hosts"`
-	KeyRequest   KeyRequest       `json:"key,omitempty" yaml:"key,omitempty"`
-	CA           *CAConfig        `json:"ca,omitempty" yaml:"ca,omitempty"`
-	SerialNumber string           `json:"serialnumber,omitempty" yaml:"serialnumber,omitempty"`
+	CN           string      `json:"CN" yaml:"CN"`
+	Names        []Name      `json:"names" yaml:"names"`
+	Hosts        []string    `json:"hosts" yaml:"hosts"`
+	KeyRequest   *KeyRequest `json:"key,omitempty" yaml:"key,omitempty"`
+	CA           *CAConfig   `json:"ca,omitempty" yaml:"ca,omitempty"`
+	SerialNumber string      `json:"serialnumber,omitempty" yaml:"serialnumber,omitempty"`
 	Extensions   []Extension `json:"extensions,omitempty" yaml:"extensions,omitempty"`
 }
 
 // New returns a new, empty CertificateRequest with a
-// BasicKeyRequest.
+// KeyRequest.
 func New() *CertificateRequest {
 	return &CertificateRequest{
-		KeyRequest: NewBasicKeyRequest(),
+		KeyRequest: NewKeyRequest(),
 	}
 }
 
@@ -124,7 +124,7 @@ func (cr *CertificateRequest) Name() pkix.Name {
 func ParseRequest(req *CertificateRequest) (csr, key []byte, err error) {
 	log.Info("received CSR")
 	if req.KeyRequest == nil {
-		req.KeyRequest = NewBasicKeyRequest()
+		req.KeyRequest = NewKeyRequest()
 	}
 
 	log.Infof("generating key: %s-%d", req.KeyRequest.Algo(), req.KeyRequest.Size())

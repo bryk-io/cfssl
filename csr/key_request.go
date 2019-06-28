@@ -8,41 +8,34 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"errors"
+
 	"github.com/cloudflare/cfssl/log"
 )
 
-// A KeyRequest is a generic request for a new key.
-type KeyRequest interface {
-	Algo() string
-	Size() int
-	Generate() (crypto.PrivateKey, error)
-	SigAlgo() x509.SignatureAlgorithm
-}
-
-// A BasicKeyRequest contains the algorithm and key size for a new private key.
-type BasicKeyRequest struct {
+// A KeyRequest contains the algorithm and key size for a new private key.
+type KeyRequest struct {
 	A string `json:"algo" yaml:"algo"`
 	S int    `json:"size" yaml:"size"`
 }
 
-// NewBasicKeyRequest returns a default BasicKeyRequest.
-func NewBasicKeyRequest() *BasicKeyRequest {
-	return &BasicKeyRequest{"ecdsa", curveP256}
+// NewKeyRequest returns a default KeyRequest.
+func NewKeyRequest() *KeyRequest {
+	return &KeyRequest{"ecdsa", curveP256}
 }
 
 // Algo returns the requested key algorithm represented as a string.
-func (kr *BasicKeyRequest) Algo() string {
+func (kr *KeyRequest) Algo() string {
 	return kr.A
 }
 
 // Size returns the requested key size.
-func (kr *BasicKeyRequest) Size() int {
+func (kr *KeyRequest) Size() int {
 	return kr.S
 }
 
 // Generate generates a key as specified in the request. Currently,
 // only ECDSA and RSA are supported.
-func (kr *BasicKeyRequest) Generate() (crypto.PrivateKey, error) {
+func (kr *KeyRequest) Generate() (crypto.PrivateKey, error) {
 	log.Debugf("generate key from request: algo=%s, size=%d", kr.Algo(), kr.Size())
 	switch kr.Algo() {
 	case "rsa":
@@ -73,7 +66,7 @@ func (kr *BasicKeyRequest) Generate() (crypto.PrivateKey, error) {
 
 // SigAlgo returns an appropriate X.509 signature algorithm given the
 // key request's type and size.
-func (kr *BasicKeyRequest) SigAlgo() x509.SignatureAlgorithm {
+func (kr *KeyRequest) SigAlgo() x509.SignatureAlgorithm {
 	switch kr.Algo() {
 	case "rsa":
 		switch {
@@ -101,4 +94,3 @@ func (kr *BasicKeyRequest) SigAlgo() x509.SignatureAlgorithm {
 		return x509.UnknownSignatureAlgorithm
 	}
 }
-
