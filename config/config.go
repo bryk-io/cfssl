@@ -123,6 +123,11 @@ type SigningProfile struct {
 	IgnoredLintsMap map[string]bool
 }
 
+// String returns a basic string representation of the identifier
+func (oid *OID) String() string {
+	return asn1.ObjectIdentifier(*oid).String()
+}
+
 // UnmarshalJSON unmarshals a JSON string into an OID.
 func (oid *OID) UnmarshalJSON(data []byte) (err error) {
 	if data[0] != '"' || data[len(data)-1] != '"' {

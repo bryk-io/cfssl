@@ -15,6 +15,8 @@ import (
 	"net"
 	"net/mail"
 	"net/url"
+	"regexp"
+	"strconv"
 	"strings"
 
 	cferr "github.com/cloudflare/cfssl/errors"
@@ -36,6 +38,13 @@ type Name struct {
 	O            string `json:"O,omitempty" yaml:"O,omitempty"`   // OrganisationName
 	OU           string `json:"OU,omitempty" yaml:"OU,omitempty"` // OrganisationalUnitName
 	SerialNumber string `json:"SerialNumber,omitempty" yaml:"SerialNumber,omitempty"`
+
+	// Additional fields
+	PC               string `json:"pc,omitempty" yaml:"pc,omitempty"` // PostalCode
+	SA               string `json:"sa,omitempty" yaml:"sa,omitempty"` // StringAddress
+	Pseudonym        string `json:"pseudonym,omitempty" yaml:"pseudonym,omitempty"`
+	UniqueIdentifier string `json:"unique_identifier,omitempty" yaml:"unique_identifier,omitempty"`
+	UnstructuredName string `json:"unstructured_name,omitempty" yaml:"unstructured_name,omitempty"`
 }
 
 // A KeyRequest contains the algorithm and key size for a new private key.
@@ -132,12 +141,15 @@ type CAConfig struct {
 // A CertificateRequest encapsulates the API interface to the
 // certificate request functionality.
 type CertificateRequest struct {
-	CN           string     `json:"CN" yaml:"CN"`
-	Names        []Name     `json:"names" yaml:"names"`
-	Hosts        []string   `json:"hosts" yaml:"hosts"`
+	CN           string      `json:"CN" yaml:"CN"`
+	Names        []Name      `json:"names" yaml:"names"`
+	Hosts        []string    `json:"hosts" yaml:"hosts"`
 	KeyRequest   *KeyRequest `json:"key,omitempty" yaml:"key,omitempty"`
-	CA           *CAConfig  `json:"ca,omitempty" yaml:"ca,omitempty"`
-	SerialNumber string     `json:"serialnumber,omitempty" yaml:"serialnumber,omitempty"`
+	CA           *CAConfig   `json:"ca,omitempty" yaml:"ca,omitempty"`
+	SerialNumber string      `json:"serialnumber,omitempty" yaml:"serialnumber,omitempty"`
+
+	// Additional fields
+	Extensions []Extension `json:"extensions,omitempty" yaml:"extensions,omitempty"`
 }
 
 // New returns a new, empty CertificateRequest with a
@@ -160,12 +172,20 @@ func (cr *CertificateRequest) Name() pkix.Name {
 	var name pkix.Name
 	name.CommonName = cr.CN
 
+	var uniqueIDs, pseudonyms, unstructuredNames []string
 	for _, n := range cr.Names {
 		appendIf(n.C, &name.Country)
 		appendIf(n.ST, &name.Province)
 		appendIf(n.L, &name.Locality)
 		appendIf(n.O, &name.Organization)
 		appendIf(n.OU, &name.OrganizationalUnit)
+
+		// Add additional fields
+		appendIf(n.PC, &name.PostalCode)
+		appendIf(n.SA, &name.StreetAddress)
+		appendIf(n.UniqueIdentifier, &uniqueIDs)
+		appendIf(n.Pseudonym, &pseudonyms)
+		appendIf(n.UnstructuredName, &unstructuredNames)
 	}
 	name.SerialNumber = cr.SerialNumber
 	return name
@@ -247,6 +267,14 @@ func ExtractCertificateRequest(cert *x509.Certificate) *CertificateRequest {
 		req.CA.PathLenZero = cert.MaxPathLenZero
 	}
 
+	// Keep certificate extensions
+	for _, e := range cert.Extensions {
+		req.Extensions = append(req.Extensions, Extension{
+			Id:       e.Id.String(),
+			Critical: e.Critical,
+			Value:    e.Value,
+		})
+	}
 	return req
 }
 
@@ -269,9 +297,9 @@ func getHosts(cert *x509.Certificate) []string {
 }
 
 // getNames returns an array of Names from the certificate
-// It onnly cares about Country, Organization, OrganizationalUnit, Locality, Province
+// It only cares about Country, Organization, OrganizationalUnit, Locality, Province
 func getNames(sub pkix.Name) []Name {
-	// anonymous func for finding the max of a list of interger
+	// anonymous func for finding the max of a list of integers
 	max := func(v1 int, vn ...int) (max int) {
 		max = v1
 		for i := 0; i < len(vn); i++ {
@@ -287,8 +315,10 @@ func getNames(sub pkix.Name) []Name {
 	nou := len(sub.OrganizationalUnit)
 	nl := len(sub.Locality)
 	np := len(sub.Province)
+	npc := len(sub.PostalCode)
+	nst := len(sub.StreetAddress)
 
-	n := max(nc, norg, nou, nl, np)
+	n := max(nc, norg, nou, nl, np, npc, nst)
 
 	names := make([]Name, n)
 	for i := range names {
@@ -306,6 +336,12 @@ func getNames(sub pkix.Name) []Name {
 		}
 		if i < np {
 			names[i].ST = sub.Province[i]
+		}
+		if i < npc {
+			names[i].PC = sub.PostalCode[i]
+		}
+		if i < nst {
+			names[i].SA = sub.StreetAddress[i]
 		}
 	}
 	return names
@@ -390,6 +426,14 @@ func Generate(priv crypto.Signer, req *CertificateRequest) (csr []byte, err erro
 		}
 	}
 
+	if req.Extensions != nil {
+		for _, e := range req.Extensions {
+			if pe, err := e.toPKIX(); err == nil {
+				tpl.ExtraExtensions = append(tpl.ExtraExtensions, pe)
+			}
+		}
+	}
+
 	csr, err = x509.CreateCertificateRequest(rand.Reader, &tpl, priv)
 	if err != nil {
 		log.Errorf("failed to generate a CSR: %v", err)
@@ -427,4 +471,44 @@ func appendCAInfoToCSR(reqConf *CAConfig, csr *x509.CertificateRequest) error {
 	}
 
 	return nil
+}
+
+// Extension provides an easy to use representation for extensions included in
+// CSR instance. The 'id' attribute can be specified like a simple string of the
+// form '1.2.3.4.5', and the 'value' field like a regular string.
+type Extension struct {
+	Id       string `json:"id"`
+	Critical bool   `json:"critical"`
+	Value    []byte `json:"value"`
+}
+
+func (e *Extension) toPKIX() (ext pkix.Extension, err error) {
+	ext.Id, err = parseObjectIdentifier(e.Id)
+	if err != nil {
+		return
+	}
+	ext.Critical = e.Critical
+	ext.Value = e.Value
+	return
+}
+
+func parseObjectIdentifier(oidString string) (oid asn1.ObjectIdentifier, err error) {
+	validOID, err := regexp.MatchString("\\d(\\.\\d+)*", oidString)
+	if err != nil {
+		return
+	}
+	if !validOID {
+		err = errors.New("invalid OID")
+		return
+	}
+
+	segments := strings.Split(oidString, ".")
+	oid = make(asn1.ObjectIdentifier, len(segments))
+	for i, intString := range segments {
+		oid[i], err = strconv.Atoi(intString)
+		if err != nil {
+			return
+		}
+	}
+	return
 }

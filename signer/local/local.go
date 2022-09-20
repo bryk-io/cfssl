@@ -29,7 +29,7 @@ import (
 	"github.com/cloudflare/cfssl/info"
 	"github.com/cloudflare/cfssl/log"
 	"github.com/cloudflare/cfssl/signer"
-	"github.com/google/certificate-transparency-go"
+	ct "github.com/google/certificate-transparency-go"
 	"github.com/google/certificate-transparency-go/client"
 	"github.com/google/certificate-transparency-go/jsonclient"
 
@@ -303,7 +303,7 @@ func (s *Signer) Sign(req signer.SignRequest) (cert []byte, err error) {
 			cferr.BadRequest, errors.New("not a csr"))
 	}
 
-	csrTemplate, err := signer.ParseCertificateRequest(s, block.Bytes)
+	csrTemplate, err := signer.ParseCertificateRequest(s, block.Bytes, profile.AllowedExtensions)
 	if err != nil {
 		return nil, err
 	}

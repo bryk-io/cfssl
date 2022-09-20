@@ -84,18 +84,46 @@ func (s *Subject) Name() pkix.Name {
 	var name pkix.Name
 	name.CommonName = s.CN
 
+	var uniqueIDs, pseudonyms, unstructuredNames []string
 	for _, n := range s.Names {
 		appendIf(n.C, &name.Country)
 		appendIf(n.ST, &name.Province)
 		appendIf(n.L, &name.Locality)
 		appendIf(n.O, &name.Organization)
 		appendIf(n.OU, &name.OrganizationalUnit)
+
+		// Additional fields
+		appendIf(n.PC, &name.PostalCode)
+		appendIf(n.SA, &name.StreetAddress)
+		appendIf(n.UniqueIdentifier, &uniqueIDs)
+		appendIf(n.Pseudonym, &pseudonyms)
+		appendIf(n.UnstructuredName, &unstructuredNames)
 	}
 	name.SerialNumber = s.SerialNumber
+
+	// Add extraName values if required
+	if len(uniqueIDs) != 0 {
+		name.ExtraNames = append(name.ExtraNames, pkix.AttributeTypeAndValue{
+			Type:  asn1.ObjectIdentifier{2, 5, 4, 45},
+			Value: strings.Join(uniqueIDs, "/"),
+		})
+	}
+	if len(pseudonyms) != 0 {
+		name.ExtraNames = append(name.ExtraNames, pkix.AttributeTypeAndValue{
+			Type:  asn1.ObjectIdentifier{2, 5, 4, 65},
+			Value: strings.Join(pseudonyms, "/"),
+		})
+	}
+	if len(unstructuredNames) != 0 {
+		name.ExtraNames = append(name.ExtraNames, pkix.AttributeTypeAndValue{
+			Type:  asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 9, 2},
+			Value: strings.Join(unstructuredNames, "/"),
+		})
+	}
 	return name
 }
 
-// SplitHosts takes a comma-spearated list of hosts and returns a slice
+// SplitHosts takes a comma-separated list of hosts and returns a slice
 // with the hosts split
 func SplitHosts(hostList string) []string {
 	if hostList == "" {
@@ -171,7 +199,7 @@ func DefaultSigAlgo(priv crypto.Signer) x509.SignatureAlgorithm {
 
 // ParseCertificateRequest takes an incoming certificate request and
 // builds a certificate template from it.
-func ParseCertificateRequest(s Signer, csrBytes []byte) (template *x509.Certificate, err error) {
+func ParseCertificateRequest(s Signer, csrBytes []byte, allowedExtensions []config.OID) (template *x509.Certificate, err error) {
 	csrv, err := x509.ParseCertificateRequest(csrBytes)
 	if err != nil {
 		err = cferr.Wrap(cferr.CSRError, cferr.ParseFailed, err)
@@ -212,6 +240,13 @@ func ParseCertificateRequest(s Signer, csrBytes []byte) (template *x509.Certific
 			template.IsCA = constraints.IsCA
 			template.MaxPathLen = constraints.MaxPathLen
 			template.MaxPathLenZero = template.MaxPathLen == 0
+		} else {
+			// Only preserve extensions that are allowed by the signing profile
+			for _, ae := range allowedExtensions {
+				if ae.String() == val.Id.String() {
+					template.ExtraExtensions = append(template.ExtraExtensions, val)
+				}
+			}
 		}
 	}
 

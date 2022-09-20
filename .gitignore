@@ -5,3 +5,5 @@ profile.out
 bin
 *.deb
 *.rpm
+.idea
+.DS_Store
