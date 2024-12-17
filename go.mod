@@ -13,7 +13,6 @@ require (
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/certificate-transparency-go v1.0.21
-	github.com/google/go-cmp v0.5.8 // indirect
 	github.com/jmhodges/clock v0.0.0-20160418191101-880ee4c33548
 	github.com/jmoiron/sqlx v1.2.0
 	github.com/kisielk/sqlstruct v0.0.0-20150923205031-648daed35d49
@@ -30,10 +29,9 @@ require (
 	github.com/ziutek/mymysql v1.5.4 // indirect
 	github.com/zmap/zcrypto v0.0.0-20190729165852-9051775e6a2e
 	github.com/zmap/zlint v0.0.0-20190806154020-fd021b4cfbeb
-	golang.org/x/crypto v0.0.0-20220829220503-c86fa9a7ed90
+	golang.org/x/crypto v0.31.0
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616
-	golang.org/x/net v0.0.0-20220826154423-83b083e8dc8b
-	golang.org/x/tools v0.1.10 // indirect
+	golang.org/x/net v0.32.0
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )

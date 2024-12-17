@@ -6,4 +6,5 @@ bin
 *.deb
 *.rpm
 .idea
+.vscode
 .DS_Store
